@@ -12,21 +12,24 @@ fish.o: fish.c
 	$(CC) $(CFLAGS) -c $< -o $@ 
 
 cmdline.o: cmdline.c cmdline.h
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -fPIC -c $< -o $@
+
+libcmdline.so: cmdline.o
+	$(CC) $(LDFLAGS) -o $@ -shared $< 
 
 cmdline_test.o: cmdline_test.c
 	$(CC) $(CFLAGS) -c $< -o $@ 
 
 #règle d'édition de lien
 #$^ correspond à toutes les dépendances
-fish: fish.o cmdline.o 
+fish: fish.o libcmdline.so 
 	$(CC) $(LDFLAGS) $^ -o $@
 	
-cmdline_test: cmdline_test.o cmdline.o
+cmdline_test: cmdline_test.o libcmdline.so
 	$(CC) $(LDFLAGS) $^ -o $@
-	
+
 clean:
 	rm -f *.o
 
 mrproper: clean
-	rm $(TARGET)
+	rm $(TARGET) *.so
