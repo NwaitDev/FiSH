@@ -3,6 +3,7 @@
 #include <string.h>
 #include <wait.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "cmdline.h"
 
@@ -59,10 +60,15 @@ struct line {
 int main() {
   struct line li;
   char buf[BUFLEN];
-
+  
+	int input;
+	int output;
+	
   line_init(&li);
   char cwd[BUFLEN];
   for (;;) {
+  	input = 0;
+  	output = 1;
   	getcwd(cwd,BUFLEN);
     printf("fish:%s> ",cwd);
     fgets(buf, BUFLEN, stdin);
@@ -73,25 +79,22 @@ int main() {
       line_reset(&li);
       continue;
     }
-	
-		if(false){
-		/*debugging*/
+		
+		/*debugging tool*/
+		if(true){
 			line_stats(li);
 		}
 		
 		//EXIT COMMAND
-  	if(strcmp(li.cmds[0].args[0],"exit")==0){
+  	if(li.n_cmds!=0 && strcmp(li.cmds[0].args[0],"exit")==0){
+  		line_reset(&li);
   		break;
   	}
   	
-  	/* do something with li */
   	if(li.n_cmds==1){
-  	
   		//CD COMMAND
   		if(strcmp(li.cmds[0].args[0],"cd")==0){
-  			
   			char target_dir[100];
-  		
   			if(li.cmds[0].args[1]==NULL||*(li.cmds[0].args[1])=='~'){
   				//Gérer le cas où le premier caractère correspond à l'abreviation ~
   				char* home_dir = getenv("HOME");
@@ -102,61 +105,66 @@ int main() {
   				}
   			}else{
   				strcpy(target_dir,li.cmds[0].args[1]);
-  			}
-  			
+  			}	
  	  		err = chdir(target_dir);
   	 		if(err==-1){
   	 			perror("cd");
   			}
-  			
   			//reseting and going to the next line
   			line_reset(&li);
   			continue;
   		}
   		
-  		//question 3.1 and 3.2 -> one command
-  		if(li.cmds[0].n_args==1){
-  			pid_t pid = fork();
-  			if(pid==-1){
-  				perror("fork");
-  			}else{
-  				if(pid==0){
-  					execlp(li.cmds[0].args[0],li.cmds[0].args[0],NULL);
-  					perror(li.cmds[0].args[0]);
-  					exit(1);
-  				}
-  				int wstatus;
-  				wait(&wstatus);
-  				if(WIFEXITED(wstatus) && wstatus!=0){
-						fprintf(stderr,"abnormal termination : sub process exited with exit status %i\n",WEXITSTATUS(wstatus));
-					}
-					if(WIFSIGNALED(wstatus)){
-						fprintf(stderr,"abnormal termination :execution sub process killed by signal %i\n",WTERMSIG(wstatus));
-					}
+  		/*REDIRECTION PART*/
+  		if(li.redirect_input){
+  			input = open(li.file_input,O_RDONLY);
+  			if(input==-1){
+  				perror("open");
+  				line_reset(&li);
+  				continue;
   			}
   		}
-  		//question 3.3 -> one command + x args
-  		if(li.cmds[0].n_args>1){
+  		if(li.redirect_output){
+  			output=open(li.file_output,O_WRONLY|O_CREAT|O_TRUNC);
+  			if(output==-1){
+  				perror("open");
+  				line_reset(&li);
+  				continue;
+  			}
+  		}
+  		
+  		
+  		
+  		if(li.cmds[0].n_args>=1){
   			pid_t pid = fork();
   			if(pid==-1){
   				perror("fork");
   			}else{
   				if(pid==0){
+  					dup2(input,0);
+  					dup2(output,1);
   					execvp(li.cmds[0].args[0],li.cmds[0].args);
   					perror(li.cmds[0].args[0]);
   					exit(1);
  					}
+ 					
  					int wstatus;
  					wait(&wstatus);
  					if(WIFEXITED(wstatus) && wstatus!=0){
-						fprintf(stderr,"abnormal termination : sub process exited with exit status %i\n",WEXITSTATUS(wstatus));
+						fprintf(stderr,"abnormal termination : process exited with exit status %i\n",WEXITSTATUS(wstatus));
 					}
 					if(WIFSIGNALED(wstatus)){
-						fprintf(stderr,"abnormal termination :execution sub process killed by signal %i\n",WTERMSIG(wstatus));
+						fprintf(stderr,"abnormal termination : execution sub process killed by signal %i\n",WTERMSIG(wstatus));
 					}
   			}
   	 	}
 		}
+		if(li.redirect_input){
+  			close(input);
+  	}
+  	if(li.redirect_output){
+  		close(output);
+  	}
     line_reset(&li);
   }
   
