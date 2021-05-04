@@ -89,23 +89,26 @@ int main() {
   	
   		//CD COMMAND
   		if(strcmp(li.cmds[0].args[0],"cd")==0){
+  			
+  			char target_dir[100];
   		
-  			if(li.cmds[0].args[1]==NULL||strcmp(li.cmds[0].args[1],"~")==0){
-  				li.cmds[0].args[1]= getenv("HOME");
-  			}else{
-  				if(*(li.cmds[0].args[1])=='~'){
-  					//Gérer le cas où le premier caractère correspond à l'abreviation ~
-  					/*
-  					Il faudrait peutêtre créer une var pour stocker le chmin destination
-  					Comme ça, on peut free l'espace memoire juste après avoir calculé HOME
-  					
-  					*/
+  			if(li.cmds[0].args[1]==NULL||*(li.cmds[0].args[1])=='~'){
+  				//Gérer le cas où le premier caractère correspond à l'abreviation ~
+  				char* home_dir = getenv("HOME");
+  				strcpy(target_dir,home_dir);
+  				int home_len = strlen(target_dir);
+  				if(li.cmds[0].args[1]!=NULL){
+  					strcpy(target_dir+home_len,li.cmds[0].args[1]+1);
   				}
+  			}else{
+  				strcpy(target_dir,li.cmds[0].args[1]);
   			}
- 	  		err = chdir(li.cmds[0].args[1]);
+  			
+ 	  		err = chdir(target_dir);
   	 		if(err==-1){
   	 			perror("cd");
   			}
+  			
   			//reseting and going to the next line
   			line_reset(&li);
   			continue;
