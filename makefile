@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wextra -std=c99 -g 
+CFLAGS=-Wall -std=c99 -g 
 LDFLAGS=-g
 TARGET=fish cmdline_test
 

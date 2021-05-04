@@ -297,13 +297,13 @@ int line_parse(struct line *li, const char *str) {
       }
       if (curr_cmd == MAX_CMDS) {   
         free(word);
-        parse_error("Too much commands. Max: %i\n", MAX_CMDS);
+        parse_error("Too many commands. Max: %i\n", MAX_CMDS);
         valret = -1;
         break;
       }
       if (curr_arg == MAX_ARGS) {
         free(word);
-        parse_error("Too much arguments. Max: %i\n", MAX_ARGS);
+        parse_error("Too many arguments. Max: %i\n", MAX_ARGS);
         valret = -1;
         break;
       }
@@ -366,3 +366,4 @@ void line_reset(struct line *li) {
 
   memset(li, 0, sizeof(struct line));
 }
+
