@@ -8,7 +8,7 @@ all: $(TARGET)
 #règles de compilation séparée des .c
 # $< -> première dépendance (c'est à dire fish.c)
 # $@ -> cible (c'est à dire fish.o)
-fish.o: fish.c cmdline.h
+fish.o: fish.c cmdline.h util.h
 	$(CC) $(CFLAGS) -c $< -o $@ 
 
 cmdline.o: cmdline.c cmdline.h
@@ -17,9 +17,11 @@ cmdline.o: cmdline.c cmdline.h
 cmdline_test.o: cmdline_test.c cmdline.h
 	$(CC) $(CFLAGS) -c $< -o $@ 
 
+util.o: util.c util.h
+	$(CC) $(CFLAGS) -fPIC -c $< -o $@
 
 # création de la bibliothèque dynamique partagée
-libcmdline.so: cmdline.o 
+libcmdline.so: cmdline.o util.o
 	$(CC) -shared $^ -o libcmdline.so
 
 #règle d'édition de lien
