@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "fish.h"
+#include "util.h"
 #include "cmdline.h"
 
 #define BUFLEN 1024
@@ -22,10 +22,11 @@ void zombie_killer(int signal){
  		pid_t child = 0;
  		size_t i =0;
  		while(child==0 && i<bg_pids.size){
- 			child = waitpid(bg_pids.data[i++],&wstatus,WNOHANG);
+ 			child = waitpid(bg_pids.data[i],&wstatus,WNOHANG);
+ 			++i;
  		}
  		if(child!=-1 && child!=0){
- 			pid_list_remove(bg_pids,child);
+ 			pid_list_remove(&bg_pids,child);
  			if(WIFEXITED(wstatus)){
 				fprintf(stderr,"BG : process %i exited with exit status %i\n",child,WEXITSTATUS(wstatus));
 			}
@@ -107,7 +108,7 @@ int main() {
     printf("fish:%s> ",cwd);
     
     //getting the command(s)
-    fgets(buf, BUFLEN, stdin);
+    while(fgets(buf, BUFLEN, stdin)==NULL){}
     err = line_parse(&li, buf);
     if (err) { 
       //the command line entered by the user isn't valid
@@ -116,7 +117,7 @@ int main() {
     }
 		
 		/*debugging tool*/
-		if(true){
+		if(false){
 			line_stats(li);
 		}
 		
@@ -181,7 +182,7 @@ int main() {
   				perror("fork");
   			}else{
   				if(pid==0){
-  					//removing the SIGINT mask so that the program can be stopped
+  					//removing the SIGNAL mask so that the program can be stopped
   					err = sigprocmask(SIG_SETMASK,&oldset,NULL);
 						if(err==-1){
 							perror("sigprocmask reset in child");
@@ -197,7 +198,7 @@ int main() {
  					}
 					
  					int wstatus;
- 					pid_t child = wait(&wstatus);
+ 					pid_t child = waitpid(pid,&wstatus,0);
  					if(WIFEXITED(wstatus)){
 						fprintf(stderr,"FG : process %i exited with exit status %i\n",child,WEXITSTATUS(wstatus));
 					}
@@ -205,23 +206,23 @@ int main() {
 						fprintf(stderr,"FG : execution process killed by signal %i\n",WTERMSIG(wstatus));
 					}
   			}
-  			// if the command is BG
-  			if(li.cmds[0].n_args>=1 && li.background){
-  				pid_t pid = fork();
-  				if(pid==-1){
-  					perror("fork");
-  				}else{
-  					if(pid==0){
-  						dup2(input,0);
-  						dup2(output,1);
-  						execvp(li.cmds[0].args[0],li.cmds[0].args);
-  						perror(li.cmds[0].args[0]);
-  						line_reset(&li);
-  						exit(1);
- 						}
- 						pid_list_add(&bg_pids,pid);
-  				}
-  	 		}
+  	 	}
+  	 	// if the command is BG
+  		if(li.cmds[0].n_args>=1 && li.background){
+  			pid_t pid = fork();
+  			if(pid==-1){
+  				perror("fork");
+  			}else{
+  				if(pid==0){
+  					dup2(input,0);
+  					dup2(output,1);
+  					execvp(li.cmds[0].args[0],li.cmds[0].args);
+  					perror(li.cmds[0].args[0]);
+  					line_reset(&li);
+  					exit(1);
+ 					}
+ 					pid_list_add(&bg_pids,pid);
+  			}
   	 	}
 		}
 		if(li.redirect_input){
@@ -230,6 +231,7 @@ int main() {
   	if(li.redirect_output){
   		close(output);
   	}
+  	//pid_list_print(&bg_pids);
     line_reset(&li);
   }
   

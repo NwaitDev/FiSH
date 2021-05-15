@@ -65,5 +65,10 @@ int pid_list_remove(struct pid_list *list, pid_t toremove){
 	return -1;
 }
 
+void pid_list_print(struct pid_list *list){
+	for(size_t i = 0; i<list->size;++i){
+		printf("pid[%li]=%i\n",i,list->data[i]);
+	}
+}
 
 

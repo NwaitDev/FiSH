@@ -28,3 +28,5 @@ size_t pid_list_contain(struct pid_list *list, pid_t needle);
  */
 int pid_list_remove(struct pid_list *list, pid_t toremove);
 
+void pid_list_print(struct pid_list *list);
+
