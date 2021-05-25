@@ -6,6 +6,9 @@
 #include <wait.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <stdbool.h>
 
 #include "util.h"
 #include "cmdline.h"
@@ -14,8 +17,38 @@
 
 #define YES_NO(i) ((i) ? "Y" : "N")
 
+/**
+	* Global variable that represents the
+	* list of all the pids of the processes running background from FiSH
+	*/
 struct pid_list bg_pids;
 
+
+/**
+ * Prints how a child process terminated
+ * 
+ * @param child the pid of the terminated child
+ * @param wstatus the termination status of the process
+ */
+void waitmessage(pid_t child, int wstatus){
+	if(WIFEXITED(wstatus)){
+		fprintf(stderr,"BG : process %i exited with exit status %i\n",child,WEXITSTATUS(wstatus));
+	}
+	if(WIFSIGNALED(wstatus)){
+		fprintf(stderr,"BG : process %i killed by signal %i\n",child,WTERMSIG(wstatus));
+	}
+}
+
+/**
+ * Signal handler for SIGCHILD
+ * this function determines which child process terminated and removes its 
+ * pid from the global variable bg_pids 
+ * so that the killed process is no more referenced
+ * it also prints the terination status of the process 
+ * on the standard error stream
+ * 
+ * @param signal the signal to be handled
+ */
 void zombie_killer(int signal){
 	if(signal == SIGCHLD){
 		int wstatus;
@@ -27,12 +60,7 @@ void zombie_killer(int signal){
  		}
  		if(child!=-1 && child!=0){
  			pid_list_remove(&bg_pids,child);
- 			if(WIFEXITED(wstatus)){
-				fprintf(stderr,"BG : process %i exited with exit status %i\n",child,WEXITSTATUS(wstatus));
-			}
-			if(WIFSIGNALED(wstatus)){
-				fprintf(stderr,"BG : process %i killed by signal %i\n",child,WTERMSIG(wstatus));
-			}
+ 			waitmessage(child, wstatus);
  		}
  		if(child==-1){
  			perror("waitpid");
@@ -40,6 +68,11 @@ void zombie_killer(int signal){
 	}
 }
 
+/**
+	*	Prints the data of the line structure
+	*
+	* @param li the line of which to print data 
+	*/
 static void line_stats(struct line li){
 	fprintf(stderr, "Command line:\n");
     fprintf(stderr, "\tNumber of commands: %zu\n", li.n_cmds);
@@ -67,8 +100,43 @@ static void line_stats(struct line li){
     fprintf(stderr, "\tBackground: %s\n", YES_NO(li.background));
 }
 
+/**
+	*	function that changes the working 
+	* directory for the adress given in argument
+	*	this function handles empty adresses or adresses
+	* starting with the ~ (home) symbol
+	*
+	* @param path the adress to which change working directory
+	*/
+void cd(char * path){
+	char target_dir[100];
+  if(path==NULL||*(path)=='~'){
+  	//handling the case where the path starts with ~
+  	char* home_dir = getenv("HOME");
+  	strcpy(target_dir,home_dir);
+  	int home_len = strlen(target_dir);
+  	if(path!=NULL){
+  		strcpy(target_dir+home_len,path+1);
+  	}
+  }else{
+  	strcpy(target_dir,path);
+  }	
+ 	int err = chdir(target_dir);
+  if(err==-1){
+  	perror("cd");
+  }
+}
 
+
+/**
+	* Main function of the FiSH program
+	*
+	*/
 int main() {
+	//sets umask to zero so that the 
+	//newly created files have default permissions
+	umask(0);
+	
 	//initializing the variables
   struct line li;
   line_init(&li);
@@ -91,7 +159,7 @@ int main() {
   //blocking SIGINT for FiSH
   sigset_t toblock, oldset;
   sigaddset(&toblock,SIGINT);
-  sigaddset(&toblock,SIGQUIT);
+  //sigaddset(&toblock,SIGQUIT);
 	err = sigprocmask(SIG_BLOCK,&toblock,&oldset);
 	if(err==-1){
 		perror("sigprocmask blockset");
@@ -110,15 +178,20 @@ int main() {
     //getting the command(s)
     fgets(buf, BUFLEN, stdin);
     err = line_parse(&li, buf);
-    if (err) { 
+    if (err==-1) { 
       //the command line entered by the user isn't valid
       line_reset(&li);
       continue;
     }
-		
 		/*debugging tool*/
-		if(true){
+		if(false){
 			line_stats(li);
+		}
+		
+		//EMPTY COMMAND
+		if(li.n_cmds==0){
+			line_reset(&li);
+			continue;
 		}
 		
 		//EXIT COMMAND
@@ -126,13 +199,22 @@ int main() {
   		line_reset(&li);
   		break;
   	}
-  	////////////////////////////////////////////////
+  	
+  	if(li.n_cmds==1){
+  	
+  		//CD COMMAND
+  		if(strcmp(li.cmds[0].args[0],"cd")==0){
+  			cd(li.cmds[0].args[1]);
+  			//reseting and going to the next line
+  			line_reset(&li);
+  			continue;
+  		}
   		
-  		/*REDIRECTION PART*/
+  		//Handling redirections
   		if(li.redirect_input){
   			input = open(li.file_input,O_RDONLY);
   			if(input==-1){
-  				perror("open");
+  				perror("redirection of input");
   				line_reset(&li);
   				continue;
   			}
@@ -140,41 +222,15 @@ int main() {
   		if(li.redirect_output){
   			output=open(li.file_output,O_WRONLY|O_CREAT|O_TRUNC);
   			if(output==-1){
-  				perror("open");
+  				perror("redirection of output");
   				line_reset(&li);
+  				close(input);
   				continue;
   			}
   		}
-  	
-  	if(li.n_cmds==1){
-  		////////////////////////////////////////////////
-  		//CD COMMAND
-  		if(strcmp(li.cmds[0].args[0],"cd")==0){
-  			char target_dir[100];
-  			if(li.cmds[0].args[1]==NULL||*(li.cmds[0].args[1])=='~'){
-  				
-  				//handling the case where the path starts with ~
-  				char* home_dir = getenv("HOME");
-  				strcpy(target_dir,home_dir);
-  				int home_len = strlen(target_dir);
-  				if(li.cmds[0].args[1]!=NULL){
-  					strcpy(target_dir+home_len,li.cmds[0].args[1]+1);
-  				}
-  			}else{
-  				strcpy(target_dir,li.cmds[0].args[1]);
-  			}	
- 	  		err = chdir(target_dir);
-  	 		if(err==-1){
-  	 			perror("cd");
-  			}
-  			//reseting and going to the next line
-  			line_reset(&li);
-  			continue;
-  		}
-  		////////////////////////////////////////////////
   		
   		//executing the command if this isn't an internal command 
-  		// if the command is FG
+  		// if the command is FG and doesn't have pipes
   		if(li.cmds[0].n_args>=1 && !li.background){
   			pid_t pid = fork();
   			if(pid==-1){
@@ -188,24 +244,27 @@ int main() {
 							line_reset(&li);
 							exit(1);
 						}
+						//redirecting to the required streams
   					dup2(input,0);
   					dup2(output,1);
   					execvp(li.cmds[0].args[0],li.cmds[0].args);
   					perror(li.cmds[0].args[0]);
   					exit(1);
  					}
-					
+ 					//closing the files if there has been a redirection
+					if(input!=0){
+						close(input);
+					}
+					if(output!=1){
+						close(output);
+					}
+					//waiting for the end of the process
  					int wstatus;
  					pid_t child = waitpid(pid,&wstatus,0);
- 					if(WIFEXITED(wstatus)){
-						fprintf(stderr,"FG : process %i exited with exit status %i\n",child,WEXITSTATUS(wstatus));
-					}
-					if(WIFSIGNALED(wstatus)){
-						fprintf(stderr,"FG : execution process killed by signal %i\n",WTERMSIG(wstatus));
-					}
+ 					waitmessage(child,wstatus);
   			}
-  	 	}
-  	 	// if the command is BG
+  	 	}//end of the 1 foreground process treatement
+  	 	// if the command is BG and doesn't have pipes
   		if(li.cmds[0].n_args>=1 && li.background){
   			pid_t pid = fork();
   			if(pid==-1){
@@ -220,66 +279,129 @@ int main() {
   					exit(1);
  					}
  					pid_list_add(&bg_pids,pid);
+ 					if(input!=0){
+						close(input);
+					}
+					if(output!=1){
+						close(output);
+					}
   			}
-  	 	}
-		}else{
+  	 	}//end of the 1 background process treatement
+		}//end of the 1 command treatement
+		else{
+  		//executing the command if this isn't an internal command 
+  		// if the command is FG and requires pipes
 			if(!li.background){
-				//if there are more than one command
+				//initializing the pipes
 				int tubes[li.n_cmds-1][2];
-				dup2(input,0);
-  			dup2(output,1);
-  			struct pid_list thecommandstubes;
-  			pid_list_create(&thecommandstubes);
-				for(int i= 0; i<li.n_cmds;++i){
+				
+				//preparing to list of all the future processes to kill
+				struct pid_list pipe_processes;
+				pid_list_create(&pipe_processes);
+				
+				for(size_t i=0;i<li.n_cmds;++i){
 					pipe(tubes[i]);
-					pid_t newpid=fork();
-					if(newpid==-1){
+					pid_t newpid = fork();
+					if(newpid == -1){
 						perror("fork");
 						break;
 					}
-					pid_list_add(&thecommandstubes, newpid);
-					
 					if(newpid==0){
-						//chaque processus écrit sur sa sortie standard (le tube de son numéro)
-						printf("I'm alive, my pid is : %i\n",getpid());
-						dup2(tubes[i][1],1);
-						close(tubes[i][1]);
-						
-						//chaque processus lit dans le tube du numéro du processus précédent
-						if(i!=0){
-							dup2(tubes[i-1][0],0);
-							close(tubes[i-1][0]);
+						//removing the SIGNAL mask so that the program can be stopped
+						err = sigprocmask(SIG_SETMASK,&oldset,NULL);
+						if(err==-1){
+							perror("sigprocmask reset in child");
+							line_reset(&li);
+							exit(1);
 						}
+						
+						if(i==0){
+							//first process needs to read the input stream
+							dup2(input, 0);
+						}else{
+							//other processes need to read in the pipe of the previous process
+							dup2(tubes[i-1][0],0);
+						}
+						if(i==li.n_cmds-1){
+							//last process needs to write in the output stream
+							dup2(output, 1);
+						}else{
+							//other processes need to write in their pipe
+							dup2(tubes[i][1],1);
+						}
+						//closing useless file descriptors
+						close(tubes[i][0]);
+						close(tubes[i][1]);
 						execvp(li.cmds[i].args[0],li.cmds[i].args);
-  					perror(li.cmds[i].args[0]);
-  					exit(1);
+						perror(li.cmds[i].args[0]);
+						exit(1);
+					}
+					//adding the new child to the list of processes to kill
+					pid_list_add(&pipe_processes, newpid);
+					//closing useless file descriptors 
+					if(i!=0){
+						close(tubes[i-1][0]);
 					}
 					close(tubes[i][1]);
-					if(i!=li.n_cmds-1){
-						close(tubes[i][0]);
-					}
 				}
+				close(tubes[li.n_cmds-2][0]);
+				if(input!=0){
+					close(input);
+				}
+				if(output!=1){
+					close(output);
+				}
+				//killing the piped processes of the list one by one before continuing the loop
 				for(size_t i = 0; i<li.n_cmds;++i){
 					int wstatus;
-					printf("je vais attendre le processus %i \n",thecommandstubes.data[i]);
- 					pid_t child = waitpid(thecommandstubes.data[i],&wstatus,0);
- 					if(WIFEXITED(wstatus)){
-						fprintf(stderr,"FG : process %i exited with exit status %i\n",child,WEXITSTATUS(wstatus));
-					}
-					if(WIFSIGNALED(wstatus)){
-						fprintf(stderr,"FG : process %i killed by signal %i\n",child,WTERMSIG(wstatus));
-					}
+					pid_t child = waitpid(pipe_processes.data[i],&wstatus,0);
+ 					waitmessage(child,wstatus);
 				}
-				pid_list_destroy(&thecommandstubes);
-			}
-			
+				pid_list_destroy(&pipe_processes);
+				
+			}//end of the foreground piped processes treatement
+			else{
+				//if the command is BG and requires pipes
+				int tubes[li.n_cmds-1][2];
+				for(size_t i=0;i<li.n_cmds;++i){
+					pipe(tubes[i]);
+					pid_t newpid = fork();
+					if(newpid == -1){
+						perror("fork");
+						break;
+					}
+					if(newpid==0){
+						if(i==0){
+							dup2(input, 0);
+						}else{
+							dup2(tubes[i-1][0],0);
+						}
+						if(i==li.n_cmds-1){
+							dup2(output, 1);
+						}else{
+							dup2(tubes[i][1],1);
+						}
+						close(tubes[i][0]);
+						close(tubes[i][1]);
+						execvp(li.cmds[i].args[0],li.cmds[i].args);
+						perror(li.cmds[i].args[0]);
+						exit(1);
+					}
+					pid_list_add(&bg_pids, newpid);
+					if(i!=0){
+						close(tubes[i-1][0]);
+					}
+					close(tubes[i][1]);
+				}
+				close(tubes[li.n_cmds-2][0]);
+				if(input!=0){
+					close(input);
+				}
+				if(output!=1){
+					close(output);
+				}
+			}//end of the background piped processes treatement
 		}
-		if(li.redirect_input){
-  			close(input);
-  	}
-  	if(li.redirect_output){
-  		close(output);
-  	}
   	//pid_list_print(&bg_pids);
     line_reset(&li);
   }
