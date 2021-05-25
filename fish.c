@@ -135,7 +135,7 @@ void cd(char * path){
 int main() {
 	//sets umask to zero so that the 
 	//newly created files have default permissions
-	umask(0);
+	umask(006660);
 	
 	//initializing the variables
   struct line li;
@@ -200,6 +200,25 @@ int main() {
   		break;
   	}
   	
+  	//Handling redirections
+  	if(li.redirect_input){
+  		input = open(li.file_input,O_RDONLY);
+  		if(input==-1){
+  			perror("redirection of input");
+  			line_reset(&li);
+  			continue;
+  		}
+  	}
+  	if(li.redirect_output){
+  		output=open(li.file_output,O_WRONLY|O_CREAT|O_TRUNC);
+  		if(output==-1){
+  			perror("redirection of output");
+  			line_reset(&li);
+  			close(input);
+  			continue;
+  		}
+  	}
+  	
   	if(li.n_cmds==1){
   	
   		//CD COMMAND
@@ -208,25 +227,6 @@ int main() {
   			//reseting and going to the next line
   			line_reset(&li);
   			continue;
-  		}
-  		
-  		//Handling redirections
-  		if(li.redirect_input){
-  			input = open(li.file_input,O_RDONLY);
-  			if(input==-1){
-  				perror("redirection of input");
-  				line_reset(&li);
-  				continue;
-  			}
-  		}
-  		if(li.redirect_output){
-  			output=open(li.file_output,O_WRONLY|O_CREAT|O_TRUNC);
-  			if(output==-1){
-  				perror("redirection of output");
-  				line_reset(&li);
-  				close(input);
-  				continue;
-  			}
   		}
   		
   		//executing the command if this isn't an internal command 
@@ -401,7 +401,7 @@ int main() {
 					close(output);
 				}
 			}//end of the background piped processes treatement
-		}
+		}//end of the piped commands treatement
   	//pid_list_print(&bg_pids);
     line_reset(&li);
   }
