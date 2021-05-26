@@ -32,10 +32,10 @@ struct pid_list bg_pids;
  */
 void waitmessage(pid_t child, int wstatus){
 	if(WIFEXITED(wstatus)){
-		fprintf(stderr,"BG : process %i exited with exit status %i\n",child,WEXITSTATUS(wstatus));
+		fprintf(stderr,"\n[%i] exited with exit status %i\n",child,WEXITSTATUS(wstatus));
 	}
 	if(WIFSIGNALED(wstatus)){
-		fprintf(stderr,"BG : process %i killed by signal %i\n",child,WTERMSIG(wstatus));
+		fprintf(stderr,"\n[%i] killed by signal %i\n",child,WTERMSIG(wstatus));
 	}
 }
 
@@ -135,7 +135,8 @@ void cd(char * path){
 int main() {
 	//sets umask to zero so that the 
 	//newly created files have default permissions
-	umask(006660);
+	//doesn't seem to be working
+	umask(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 	
 	//initializing the variables
   struct line li;
@@ -214,8 +215,21 @@ int main() {
   		if(output==-1){
   			perror("redirection of output");
   			line_reset(&li);
-  			close(input);
+  			if(input!=0){
+  				close(input);
+  			}
   			continue;
+  		}
+  	}else{
+  		if(li.background){
+  			output=open("/dev/null",O_WRONLY);
+  			if(output==-1){
+  				perror("redirection of output");
+  				line_reset(&li);
+  				if(input!=0){
+  					close(input);
+  				}
+  			}
   		}
   	}
   	
@@ -261,7 +275,9 @@ int main() {
 					//waiting for the end of the process
  					int wstatus;
  					pid_t child = waitpid(pid,&wstatus,0);
- 					waitmessage(child,wstatus);
+ 					if(false){
+ 						waitmessage(child,wstatus);
+ 					}
   			}
   	 	}//end of the 1 foreground process treatement
   	 	// if the command is BG and doesn't have pipes
@@ -355,7 +371,9 @@ int main() {
 				for(size_t i = 0; i<li.n_cmds;++i){
 					int wstatus;
 					pid_t child = waitpid(pipe_processes.data[i],&wstatus,0);
- 					waitmessage(child,wstatus);
+ 					if(false){
+ 						waitmessage(child,wstatus);
+ 					}
 				}
 				pid_list_destroy(&pipe_processes);
 				
@@ -404,7 +422,7 @@ int main() {
 		}//end of the piped commands treatement
   	//pid_list_print(&bg_pids);
     line_reset(&li);
-  }
+  }//end of the prompt loop
   pid_list_destroy(&bg_pids);
   return 0;
 }

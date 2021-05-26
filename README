@@ -1,0 +1,48 @@
+Projet FiSH de Nathan Gallone et Titouan Degieux
+
+Bilan du projet :
+L'intégralité des questions a été traitée à l'exception de la question bonus.
+Normalement, Toutes les fonctionnalités attendues sont fonctionnelles,
+elles ont été testées au fur et à mesure du développement.
+L'application fish est capable de :
+
+	-- executer les commandes interne 
+		- exit
+		- cd (avec le symbole '~' au début du chemin ou sans)
+
+	-- effectuer des redirections d'entrées et de sorties standard
+
+	-- effectuer des commandes externes
+		- en arrière/avant plan
+		- avec ou sans tubes entre les processus
+
+	-- gérer la suppression de processus zombies 
+	qu'ils soient lancés en avant plan ou en arrière plan
+	
+	-- gérer le signal SIG_INT pour qu'il stoppe les processus en avant plan uniquement
+-----------------------------------------------------------
+-----------------------------------------------------------
+-----------------------------------------------------------
+Améliorations possibles mais non-réalisées :
+
+- La question bonus 9 n'ayant pas été traitée (gestion de motifs),
+on peut la compter parmi les améliorations possibles.
+
+- Les fichiers créés lors d'une redirection ont par défaut
+les autorisations d'accès ---x--x--- et les fichiers
+créés via la commande touch ont ---------- comme autorisation.
+On pourrait trouver un moyen de changer cela autrement qu'avec
+la commande chmod 
+
+-----------------------------------------------------------
+-----------------------------------------------------------
+-----------------------------------------------------------
+Bian sur le travail en bînome :
+
+Titouan ayant eu quelques problèmes familiaux et 
+des difficultés à venir à l'université ce semestre,
+Nathan s'est occupé de la majorité du projet de système. 
+Titouan a cependant bien suivi son avancement et a compensé
+son manque de travail sur ce projet en s'impliquant plus 
+dans les autres projets de ce semestre. 
+Et Nathan l'en remercie.
